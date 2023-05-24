@@ -9,26 +9,19 @@ namespace VictorinaBot
     {
         private static readonly string? Token = Environment.GetEnvironmentVariable("TOKEN");
         private static readonly ITelegramBotClient Bot = new TelegramBotClient(Token);
-
-        private static int _questionIndex = -1;
-
-        public static async Task SendQuestion(ITelegramBotClient botClient, Int64 chatId) {
-            await botClient.SendTextMessageAsync(chatId: chatId,
-                text: BotLogic.SendQuestion(_questionIndex));
-        }
-
-        public static async Task CheckAnswer(ITelegramBotClient botClient, Int64 chatId, Message message) {
-            await botClient.SendTextMessageAsync(chatId: chatId, BotLogic.CheckAnswer(message.Text, _questionIndex));
-        }
-
+        public static BotLogic BotLogic = new ();
         public static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
             var message = update.Message;
             var chatId = message.Chat.Id;
-            var keyboard = new ReplyKeyboardMarkup(new[]
+            var keyboards = new List<ReplyKeyboardMarkup>();
+            
+            var keyboard1 = new ReplyKeyboardMarkup(new[]
             {
                 new[] { new KeyboardButton("Пройти викторину") },
             });
+            
+            keyboards.Add(keyboard1);
 
             var keyboard2 = new ReplyKeyboardMarkup(new[]
             {
@@ -36,41 +29,19 @@ namespace VictorinaBot
                 new[] { new KeyboardButton("География") },
                 new[] { new KeyboardButton("Математика") },
             });
-
-            if (_questionIndex >= 0) {
-                await CheckAnswer(botClient, chatId, message);
-                _questionIndex++;
-                if (_questionIndex >= Data.questionsHistory.Count) {
-                    await botClient.SendTextMessageAsync(chatId: chatId,
-                        text: "Викторина пройдена, выберите следующую тему",
-                        replyMarkup: keyboard2);
-                    _questionIndex = -1;
-                }
-                else {
-                    await SendQuestion(botClient, chatId);
-                }
-            }
-
-            if (message.Text.ToLower() == "/start")
-            {
-                await botClient.SendTextMessageAsync(chatId: chatId,
-                text: "Добро пожаловать",
-                replyMarkup: keyboard);
-                return;
-            }
             
-            if (message.Text == "Пройти викторину")
-            {
-                await botClient.SendTextMessageAsync(chatId: chatId,
-                text: "Выберите тему",
-                replyMarkup: keyboard2);
-                return;
-            }
+            keyboards.Add(keyboard2);
+
+            var parser = BotLogic.Parser(message.Text);
             
-            if (message.Text == "История")
+            switch (parser.Item2)
             {
-                _questionIndex = 0;
-                await SendQuestion(botClient, chatId);
+                case >= 0:
+                    await botClient.SendTextMessageAsync(chatId: chatId, text: parser.Item1, replyMarkup: keyboards[parser.Item2], cancellationToken: cancellationToken);
+                    break;
+                case -1:
+                    await botClient.SendTextMessageAsync(chatId: chatId, text: parser.Item1, cancellationToken: cancellationToken);
+                    break;
             }
         }
 
