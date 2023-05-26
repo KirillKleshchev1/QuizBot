@@ -1,14 +1,17 @@
-﻿using Telegram.Bot;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace VictorinaBot;
 
-public class TelegramBot
+public class TelegramBot 
     {
         private static readonly string? Token = Environment.GetEnvironmentVariable("TOKEN");
-        private static readonly ITelegramBotClient Bot = new TelegramBotClient(Token ?? string.Empty);
+        private static readonly ServiceProvider BotServiceProvider =
+            new ServiceCollection().AddSingleton<ITelegramBotClient>(new TelegramBotClient(Token ?? string.Empty)).BuildServiceProvider();
+        private static readonly ITelegramBotClient? Bot = BotServiceProvider.GetService<ITelegramBotClient>();
         private static readonly BotLogic BotLogic = new ();
 
         private static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -42,10 +45,14 @@ public class TelegramBot
                     switch (parser.Item2)
                     {
                         case >= 0:
-                            await botClient.SendTextMessageAsync(chatId: chatId, text: parser.Item1, replyMarkup: keyboards[parser.Item2], cancellationToken: cancellationToken);
+                            await botClient.SendTextMessageAsync(chatId: chatId, 
+                                text: parser.Item1, replyMarkup: keyboards[parser.Item2], 
+                                cancellationToken: cancellationToken);
                             break;
                         case -1:
-                            await botClient.SendTextMessageAsync(chatId: chatId, text: parser.Item1, cancellationToken: cancellationToken);
+                            await botClient.SendTextMessageAsync(chatId: chatId, 
+                                text: parser.Item1, 
+                                cancellationToken: cancellationToken);
                             break;
                     }
                 }
@@ -60,18 +67,22 @@ public class TelegramBot
         
         public static void StartBot()
         {
-            Console.WriteLine(Bot.GetMeAsync().Result.FirstName + " started");
+            if (Bot != null)
+            {
+                Console.WriteLine(Bot.GetMeAsync().Result.FirstName + " started");
 
-            var cts = new CancellationTokenSource();
-            var cancellationToken = cts.Token;
-            var receiverOptions = new ReceiverOptions();
-            
-            Bot.StartReceiving(
-                HandleUpdateAsync,
-                HandleErrorAsync,
-                receiverOptions,
-                cancellationToken
-            );
+                var cts = new CancellationTokenSource();
+                var cancellationToken = cts.Token;
+                var receiverOptions = new ReceiverOptions();
+
+                Bot.StartReceiving(
+                    HandleUpdateAsync,
+                    HandleErrorAsync,
+                    receiverOptions,
+                    cancellationToken
+                );
+            }
+
             Console.ReadLine();
         }
     }
