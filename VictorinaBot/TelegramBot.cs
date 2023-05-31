@@ -1,88 +1,74 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Telegram.Bot;
+﻿using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
+namespace VictorinaBot
+{
 
-namespace VictorinaBot;
-
-public class TelegramBot 
+    public class TelegramBot
     {
         private static readonly string? Token = Environment.GetEnvironmentVariable("TOKEN");
-        private static readonly ServiceProvider BotServiceProvider =
-            new ServiceCollection().AddSingleton<ITelegramBotClient>(new TelegramBotClient(Token ?? string.Empty)).BuildServiceProvider();
-        private static readonly ITelegramBotClient? Bot = BotServiceProvider.GetService<ITelegramBotClient>();
-        private static readonly BotLogic BotLogic = new ();
+        private static readonly ITelegramBotClient Bot = new TelegramBotClient(Token);
+        public static BotLogic BotLogic = new();
 
-        private static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+        public static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update,
+            CancellationToken cancellationToken)
         {
             var message = update.Message;
-            if (message != null)
+            var chatId = message.Chat.Id;
+            var _keyboards = new Dictionary<string, ReplyKeyboardMarkup>();
+            var keyboard1 = new ReplyKeyboardMarkup(new[]
             {
-                var chatId = message.Chat.Id;
-                var keyboards = new List<ReplyKeyboardMarkup>();
-            
-                var keyboard1 = new ReplyKeyboardMarkup(new[]
-                {
-                    new[] { new KeyboardButton("Пройти викторину") },
-                });
-            
-                keyboards.Add(keyboard1);
+                new[] { new KeyboardButton("Пройти викторину") },
+                new[] { new KeyboardButton("Посмотреть статистику") }
+            });
 
-                var keyboard2 = new ReplyKeyboardMarkup(new[]
-                {
-                    new[] { new KeyboardButton("История") },
-                    new[] { new KeyboardButton("География") },
-                    new[] { new KeyboardButton("Математика") },
-                });
-            
-                keyboards.Add(keyboard2);
+            _keyboards["Start"] = keyboard1;
 
-                if (message.Text != null)
-                {
-                    var parser = BotLogic.Parser(message.Text, chatId);
+            var keyboard2 = new ReplyKeyboardMarkup(new[]
+            {
+                new[] { new KeyboardButton("История") },
+                new[] { new KeyboardButton("География") },
+                new[] { new KeyboardButton("Математика") },
+                new[] { new KeyboardButton("Посмотреть статистику") }
+            });
+
+            _keyboards["Themes"] = keyboard2;
+
+            var parser = BotLogic.Parser(message.Text, chatId);
+
+          
+            if (!_keyboards.ContainsKey(parser.Item2))
+                await botClient.SendTextMessageAsync(chatId: chatId, text: parser.Item1,
+                    cancellationToken: cancellationToken);
+            else
+                await botClient.SendTextMessageAsync(chatId: chatId, text: parser.Item1,
+                    replyMarkup: _keyboards[parser.Item2], cancellationToken: cancellationToken);
             
-                    switch (parser.Item2)
-                    {
-                        case >= 0:
-                            await botClient.SendTextMessageAsync(chatId: chatId, 
-                                text: parser.Item1, replyMarkup: keyboards[parser.Item2], 
-                                cancellationToken: cancellationToken);
-                            break;
-                        case -1:
-                            await botClient.SendTextMessageAsync(chatId: chatId, 
-                                text: parser.Item1, 
-                                cancellationToken: cancellationToken);
-                            break;
-                    }
-                }
-            }
         }
 
-        private static Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+        public static Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
         {
             Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(exception));
             return Task.CompletedTask;
         }
-        
+
+
         public static void StartBot()
         {
-            if (Bot != null)
-            {
-                Console.WriteLine(Bot.GetMeAsync().Result.FirstName + " started");
+            Console.WriteLine(Bot.GetMeAsync().Result.FirstName + " started");
 
-                var cts = new CancellationTokenSource();
-                var cancellationToken = cts.Token;
-                var receiverOptions = new ReceiverOptions();
-
-                Bot.StartReceiving(
-                    HandleUpdateAsync,
-                    HandleErrorAsync,
-                    receiverOptions,
-                    cancellationToken
-                );
-            }
-
+            var cts = new CancellationTokenSource();
+            var cancellationToken = cts.Token;
+            var receiverOptions = new ReceiverOptions();
+            
+            Bot.StartReceiving(
+                HandleUpdateAsync,
+                HandleErrorAsync,
+                receiverOptions,
+                cancellationToken
+            );
             Console.ReadLine();
         }
     }
+}
